@@ -101,18 +101,6 @@ st.markdown("""
 with st.sidebar:
     st.markdown("## ⚙️ Heat Risk Agent")
     st.markdown("---")
-
-    threshold = st.slider(
-        "Alert Threshold (Risk Score)",
-        min_value=0, max_value=100, value=int(_RISK_THRESHOLD), step=5,
-    )
-    refresh_interval = st.selectbox(
-        "Auto-refresh interval",
-        options=[10, 30, 60, 120],
-        index=1,
-        format_func=lambda x: f"Every {x}s",
-    )
-    st.markdown("---")
     st.markdown("**Data Source**")
     st.caption(f"Mode: `{os.getenv('TEMP_DATA_MODE', 'simulate')}`")
     st.caption(f"Region: ERCOT `{os.getenv('ERCOT_REGION', 'COAST')}`")
@@ -126,7 +114,7 @@ with st.sidebar:
         with st.spinner("Running agent simulation..."):
             try:
                 from src.agent.loop import AgentLoop
-                loop = AgentLoop(threshold=threshold, poll_interval=1)
+                loop = AgentLoop(threshold=_RISK_THRESHOLD, poll_interval=1)
                 loop.run(mode="simulate", max_steps=10)
                 st.success("Simulation complete! Logs updated.")
             except Exception as e:
@@ -145,7 +133,7 @@ st.markdown("*Real-time heat-driven grid strain prediction and autonomous alerti
 from streamlit_autorefresh import st_autorefresh
 
 # Auto-refresh (smooth background refresh without full page reload)
-st_autorefresh(interval=refresh_interval * 1000, key="data_autorefresh")
+st_autorefresh(interval=30 * 1000, key="data_autorefresh")
 
 # ── Load data ──────────────────────────────────────────────────────────────────
 
