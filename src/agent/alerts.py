@@ -37,7 +37,6 @@ logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _LOGS_DIR = _PROJECT_ROOT / "logs"
-_ALERT_LOG = _LOGS_DIR / "agent_alerts.log"
 
 _SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
 _ALERT_BACKENDS = [b.strip() for b in os.getenv("ALERT_BACKENDS", "log").split(",")]
@@ -143,6 +142,7 @@ class AlertManager:
 
 def _log_alert(payload: dict) -> None:
     """Write a plain-language alert to logs/agent_alerts.log."""
+    alert_log = _LOGS_DIR / "agent_alerts.log"
     _LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
     line = (
@@ -154,10 +154,10 @@ def _log_alert(payload: dict) -> None:
         f"{payload['message']}"
     )
 
-    with open(_ALERT_LOG, "a", encoding="utf-8") as f:
+    with open(alert_log, "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
-    logger.info("Alert written to %s", _ALERT_LOG)
+    logger.info("Alert written to %s", alert_log)
     print(f"\n{'='*60}")
     print(line)
     print(f"{'='*60}\n")

@@ -108,8 +108,17 @@ def run_pipeline(
 
     # ── 3. Align on hourly timestamp ───────────────────────────────────────────
     # Round both to the start of each hour before merging
-    temp_df["timestamp"] = temp_df["timestamp"].dt.floor("h")
-    demand_df["timestamp"] = demand_df["timestamp"].dt.floor("h")
+    # Normalize all providers to UTC without timezone metadata before merging.
+    temp_df["timestamp"] = (
+        pd.to_datetime(temp_df["timestamp"], utc=True)
+        .dt.tz_localize(None)
+        .dt.floor("h")
+    )
+    demand_df["timestamp"] = (
+        pd.to_datetime(demand_df["timestamp"], utc=True)
+        .dt.tz_localize(None)
+        .dt.floor("h")
+    )
 
     # Aggregate if there are multiple readings per hour (shouldn't happen, but safe)
     temp_hourly = (
