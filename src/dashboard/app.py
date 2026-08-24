@@ -363,8 +363,8 @@ else:
 
         # Threshold line
         fig_fc.add_hline(
-            y=threshold, line_dash="dash", line_color="#f59e0b",
-            annotation_text=f"Alert threshold ({threshold})",
+            y=_RISK_THRESHOLD, line_dash="dash", line_color="#f59e0b",
+            annotation_text=f"Alert threshold ({_RISK_THRESHOLD:.0f})",
             annotation_position="bottom right",
         )
 
@@ -497,5 +497,5 @@ st.markdown("---")
 st.caption(
     f"Heat Risk Agent | Last render: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} | "
     f"Data: ERCOT {os.getenv('ERCOT_REGION', 'COAST')} | "
-    f"Threshold: {threshold}/100"
+    f"Threshold: {_RISK_THRESHOLD:.0f}/100"
 )
