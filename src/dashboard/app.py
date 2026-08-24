@@ -142,6 +142,39 @@ def _unique_log_lines(lines: list[str]) -> list[str]:
     return list(dict.fromkeys(line for line in lines if line.strip()))
 
 
+def _current_decision_lines(data: pd.DataFrame) -> tuple[list[str], list[str]]:
+    """Build read-only decisions and alerts from the current dashboard data."""
+    if data is None or data.empty or not _MODEL_META_JSON.exists():
+        return [], []
+    try:
+        from src.model.predict import load_model, predict_risk
+
+        model = load_model()
+        decisions = []
+        alerts = []
+        for _, row in data.tail(50).iterrows():
+            result = predict_risk(
+                model,
+                temp_f=float(row["temp_f"]),
+                hour=int(row["timestamp"].hour),
+                day_of_week=int(row["timestamp"].dayofweek),
+                month=int(row["timestamp"].month),
+            )
+            flag = "ALERT" if result["risk_score"] >= _RISK_THRESHOLD else "ok"
+            line = (
+                f"[{row['timestamp'].strftime('%Y-%m-%d %H:%M')}] {flag} | "
+                f"temp={float(row['temp_f']):.1f}°F | "
+                f"demand≈{result['predicted_demand_mw']:,.0f}MW | "
+                f"risk={result['risk_score']:.1f} | level={result['risk_level']}"
+            )
+            decisions.append(line)
+            if flag == "ALERT":
+                alerts.append(line)
+        return decisions, alerts
+    except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+        return [], []
+
+
 @st.cache_data(ttl=_CACHE_TTL)
 def load_combined_data() -> tuple[pd.DataFrame | None, str | None]:
     if not _COMBINED_CSV.exists():
@@ -425,6 +458,8 @@ with col_dec:
             log_start = df["timestamp"].min().strftime("%Y-%m-%d")
             lines = [line for line in lines if line.startswith("[") and line[1:11] >= log_start]
         lines = _unique_log_lines(lines)
+        if not lines:
+            lines, _ = _current_decision_lines(df)
         # Show last 50 decisions, most recent first
         recent_lines = lines[-50:][::-1]
         if recent_lines:
@@ -437,10 +472,12 @@ with col_dec:
         else:
             st.info("No decisions recorded for the current data window.")
     else:
-        st.info(
-            "No decisions logged yet. Start the agent:\n"
-            "```\npython scripts/run_agent.py --mode simulate\n```"
-        )
+        lines, _ = _current_decision_lines(df)
+        if lines:
+            for line in lines[::-1]:
+                st.markdown(f'<div class="ok-row">{line}</div>', unsafe_allow_html=True)
+        else:
+            st.info("No current decisions available.")
 
 with col_alert:
     st.markdown("**⚠️ Triggered Alerts**")
@@ -450,6 +487,8 @@ with col_alert:
             log_start = df["timestamp"].min().strftime("%Y-%m-%d")
             alert_lines = [line for line in alert_lines if line.startswith("[") and line[1:11] >= log_start]
         alert_lines = _unique_log_lines(alert_lines)
+        if not alert_lines:
+            _, alert_lines = _current_decision_lines(df)
         alert_lines = [l for l in alert_lines if l.strip()][-20:][::-1]
         if alert_lines:
             for line in alert_lines:
@@ -460,7 +499,12 @@ with col_alert:
         else:
             st.success("No alerts triggered.")
     else:
-        st.success("No alerts triggered yet.")
+        _, alert_lines = _current_decision_lines(df)
+        if alert_lines:
+            for line in alert_lines[::-1]:
+                st.markdown(f'<div class="alert-row">🚨 {line}</div>', unsafe_allow_html=True)
+        else:
+            st.success("No alerts triggered.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
