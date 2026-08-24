@@ -305,7 +305,7 @@ else:
                 "threshold": {
                     "line": {"color": "#f59e0b", "width": 3},
                     "thickness": 0.75,
-                    "value": threshold,
+                    "value": _RISK_THRESHOLD,
                 },
             },
             number={"font": {"color": "#e0e0e0"}},
