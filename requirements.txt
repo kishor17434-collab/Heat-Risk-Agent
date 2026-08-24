@@ -18,6 +18,9 @@ plotly>=5.20.0           # richer charts in Streamlit
 python-dateutil>=2.8.2
 pyarrow>=14.0.0          # fast parquet read/write (optional but useful)
 
+# ── Dev / test ────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+
 # ── Dev / notebook (optional, comment out if not needed) ─────────────────────
 # jupyter>=1.0.0
 # matplotlib>=3.8.0

@@ -40,11 +40,12 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import requests
 from dotenv import load_dotenv
 
 from src.agent.alerts import AlertManager
 from src.model.predict import load_model, predict_risk
-from src.preflight import ProjectPreflightError, validate_required_paths
+from src.preflight import validate_required_paths
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -120,10 +121,7 @@ class AgentLoop:
 
     def _run_simulate(self, max_steps: int | None) -> None:
         """Replay historical combined.csv data row by row."""
-        try:
-            validate_required_paths([("combined dataset", _COMBINED_CSV)])
-        except ProjectPreflightError:
-            raise
+        validate_required_paths([("combined dataset", _COMBINED_CSV)])
 
         df = pd.read_csv(_COMBINED_CSV, parse_dates=["timestamp"])
         df = df.sort_values("timestamp").reset_index(drop=True)
@@ -199,7 +197,7 @@ class AgentLoop:
                         day_of_week=now.weekday(),
                         month=now.month,
                     )
-                except RuntimeError as exc:
+                except (requests.RequestException, ValueError, RuntimeError) as exc:
                     logger.error("Error in live poll cycle: %s", exc)
 
                 steps += 1

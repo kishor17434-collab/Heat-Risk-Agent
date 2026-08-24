@@ -149,13 +149,26 @@ st_autorefresh(interval=refresh_interval * 1000, key="data_autorefresh")
 
 # ── Load data ──────────────────────────────────────────────────────────────────
 
+def _recent_window(df: pd.DataFrame, days: int = 7) -> pd.DataFrame:
+    if df.empty:
+        return df
+    # CSV timestamps are stored as UTC without timezone metadata.
+    df = df.copy()
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_localize(None)
+    cut_off = pd.Timestamp.utcnow().tz_localize(None) - pd.Timedelta(days=days)
+    recent = df[df["timestamp"] >= cut_off].copy()
+    if recent.empty:
+        return df.tail(24).copy()
+    return recent.sort_values("timestamp").reset_index(drop=True)
+
+
 @st.cache_data(ttl=_CACHE_TTL)
 def load_combined_data() -> tuple[pd.DataFrame | None, str | None]:
     if not _COMBINED_CSV.exists():
         return None, "File combined.csv not found"
     try:
         df = pd.read_csv(_COMBINED_CSV, parse_dates=["timestamp"])
-        return df, None
+        return _recent_window(df), None
     except Exception as e:
         return None, f"Error reading combined.csv: {e}"
 
@@ -227,6 +240,8 @@ else:
 
     latest = df.iloc[-1]
     recent_24h = df.tail(24)
+    if len(df) > 24:
+        recent_24h = df.tail(24)
 
     # Get current risk score
     current_risk: float | None = None
@@ -426,14 +441,20 @@ with col_dec:
     st.markdown("**All Decisions**")
     if _DECISION_LOG.exists():
         lines = _DECISION_LOG.read_text(encoding="utf-8").strip().split("\n")
+        if df is not None and not df.empty:
+            log_start = df["timestamp"].min().strftime("%Y-%m-%d")
+            lines = [line for line in lines if line.startswith("[") and line[1:11] >= log_start]
         # Show last 50 decisions, most recent first
         recent_lines = lines[-50:][::-1]
-        log_html = ""
-        for line in recent_lines:
-            is_alert = "ALERT" in line and "ok" not in line[:30]
-            css_class = "alert-row" if is_alert else "ok-row"
-            log_html += f'<div class="{css_class}">{line}</div>'
-        st.markdown(log_html, unsafe_allow_html=True)
+        if recent_lines:
+            log_html = ""
+            for line in recent_lines:
+                is_alert = "ALERT" in line and "ok" not in line[:30]
+                css_class = "alert-row" if is_alert else "ok-row"
+                log_html += f'<div class="{css_class}">{line}</div>'
+            st.markdown(log_html, unsafe_allow_html=True)
+        else:
+            st.info("No decisions recorded for the current data window.")
     else:
         st.info(
             "No decisions logged yet. Start the agent:\n"
@@ -444,6 +465,9 @@ with col_alert:
     st.markdown("**⚠️ Triggered Alerts**")
     if _ALERT_LOG.exists():
         alert_lines = _ALERT_LOG.read_text(encoding="utf-8").strip().split("\n")
+        if df is not None and not df.empty:
+            log_start = df["timestamp"].min().strftime("%Y-%m-%d")
+            alert_lines = [line for line in alert_lines if line.startswith("[") and line[1:11] >= log_start]
         alert_lines = [l for l in alert_lines if l.strip()][-20:][::-1]
         if alert_lines:
             for line in alert_lines:

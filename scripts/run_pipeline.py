@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.data.pipeline import run_pipeline
 
 from src.cli_utils import configure_logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 configure_logging()
 
@@ -44,14 +44,14 @@ def main() -> int:
         parser.add_argument(
             "--start",
             type=valid_date,
-            default="2024-06-01",
-            help="Start date (YYYY-MM-DD). Default: 2024-06-01",
+            default=None,
+            help="Start date (YYYY-MM-DD). Defaults to a live one-hour window in fortyguard mode.",
         )
         parser.add_argument(
             "--end",
             type=valid_date,
-            default="2024-08-31",
-            help="End date (YYYY-MM-DD). Default: 2024-08-31",
+            default=None,
+            help="End date (YYYY-MM-DD). Defaults to a live one-hour window in fortyguard mode.",
         )
         parser.add_argument(
             "--mode",

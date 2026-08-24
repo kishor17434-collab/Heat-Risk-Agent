@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import pytest
+import requests
 from src.agent.loop import AgentLoop
 
 # Mock load_model to avoid actually loading from disk during tests if needed,
@@ -44,3 +45,23 @@ def test_make_decision_pure(monkeypatch):
     assert decision["temp_f"] == 100.0
     assert decision["actual_demand_mw"] == 14500.0
     assert decision["predicted_demand_mw"] == 15000.0
+
+
+def test_live_poll_logs_network_error_and_continues(monkeypatch, caplog):
+    monkeypatch.setattr(
+        "src.agent.loop.load_model",
+        lambda: {"meta": {}, "model": None, "thresholds": {}},
+    )
+
+    class FailingTemperatureClient:
+        def fetch(self, start, end):
+            raise requests.ConnectionError("temporary network failure")
+
+    monkeypatch.setattr("src.data.temperature_client.TemperatureClient", FailingTemperatureClient)
+    monkeypatch.setattr("src.agent.loop.time.sleep", lambda _: None)
+
+    loop = AgentLoop(threshold=75, poll_interval=0)
+    with caplog.at_level("ERROR"):
+        loop._run_live(max_steps=1)
+
+    assert "temporary network failure" in caplog.text

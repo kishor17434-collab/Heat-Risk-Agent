@@ -5,15 +5,10 @@ Inference layer: loads the saved model and returns risk scores.
 
 Risk score definition
 ─────────────────────
-The model predicts raw demand (MW). We convert this to a 0–100 risk score
-using the demand percentile thresholds saved in model_meta.json:
-
-    predicted_demand < p50   →  score  0–30  (normal)
-    p50 ≤ demand < p75       →  score 30–60  (elevated)
-    p75 ≤ demand < p90       →  score 60–80  (high)
-    demand ≥ p90             →  score 80–100 (critical)
-
-This makes the score intuitive: 70 means "demand is in the top 25%".
+The model predicts raw demand (MW). We convert it to a continuous 0–100
+risk score using demand percentile thresholds saved in model_meta.json.
+The user-facing bands are consistent everywhere: 0–49 normal, 50–69
+elevated, 70–84 high, and 85–100 critical.
 
 Usage
 -----
@@ -168,9 +163,10 @@ def forecast_24h(
     records = []
 
     for h in range(hours_ahead):
-        future_hour = (hour + h) % 24
+        future_ts = now + timedelta(hours=h)
+        future_hour = future_ts.hour
         future_dow = (day_of_week + (hour + h) // 24) % 7
-        future_month = month  # simplified: assume same month for 24h ahead
+        future_month = future_ts.month
 
         # Simple temperature projection: sinusoidal daily cycle around current temp
         # Peak at 15:00, trough at 06:00 — ±8°F amplitude
@@ -208,11 +204,9 @@ def _demand_to_risk(demand_mw: float, thresholds: dict) -> float:
     """
     Convert predicted demand (MW) to a 0–100 risk score using percentile thresholds.
 
-    Score bands:
-        0–30   : below p50 (normal)
-        30–60  : p50–p75  (elevated)
-        60–80  : p75–p90  (high)
-        80–100 : above p90 (critical)
+    Percentile thresholds determine the continuous score; risk levels use
+    the canonical score bands: 0–49 normal, 50–69 elevated, 70–84 high,
+    and 85–100 critical.
     """
     p50 = thresholds.get("p50")
     p75 = thresholds.get("p75")

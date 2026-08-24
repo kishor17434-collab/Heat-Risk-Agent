@@ -193,12 +193,10 @@ class TemperatureClient:
     @rate_limit(1.0)
     def _fetch_fortyguard(self, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
         """
-        Pull temperature from the FortyGuard API.
-        Requires FORTYGUARD_API_KEY environment variable.
-
-        NOTE: This is a stub built against the FortyGuard API contract.
-        Adjust the endpoint path / payload shape once you have live docs access.
-        Docs: https://www.fortyguard.com/api-pricing
+        Pull hourly temperature snapshots through FortyGuard's documented API.
+        The API submits asynchronous heatmap tasks rather than returning a
+        temperature series directly, so each requested hour is polled and the
+        temperature is extracted from the returned GeoJSON tiles.
         """
         api_key = os.getenv("FORTYGUARD_API_KEY", "")
         if not api_key:
@@ -207,57 +205,107 @@ class TemperatureClient:
                 "Set it in your .env file or switch TEMP_DATA_MODE to 'open_meteo'."
             )
 
-        base_url = "https://api.fortyguard.com/v1"  # adjust if needed
-        headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
+        if end_dt - start_dt > timedelta(hours=24):
+            raise ValueError(
+                "FortyGuard heatmap tasks are requested one hour at a time. "
+                "Use a maximum 24-hour window for fortyguard mode or use open_meteo for history."
+            )
 
-        # ── Fetch in 30-day chunks to stay within API limits ──────────────────
+        url = "https://api.fortyguard.com/v1/heatmap"
+        headers = {
+            "api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
         all_records: list[dict] = []
-        chunk_start = start_dt
-        while chunk_start <= end_dt:
-            chunk_end = min(chunk_start + timedelta(days=30), end_dt)
-
+        request_time = start_dt.replace(minute=0, second=0, microsecond=0)
+        while request_time <= end_dt:
             payload = {
-                "latitude": self.lat,
-                "longitude": self.lon,
-                "start": chunk_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "end": chunk_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "interval": "hourly",
-                "unit": "fahrenheit",
+                "polygon_aoi": self._fortyguard_polygon(),
+                "date_time": {
+                    "start_date": request_time.strftime("%Y-%m-%d"),
+                    "start_time": request_time.strftime("%H:%M"),
+                    "filter_type": 1,
+                },
+                "granularity": 100,
             }
 
-            logger.info("FortyGuard request: %s → %s", chunk_start.date(), chunk_end.date())
-            resp = requests.get(
-                f"{base_url}/temperature",
-                headers=headers,
-                params=payload,
-                timeout=30,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+            logger.info("Submitting FortyGuard heatmap task for %s", request_time)
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            activity_id = response.json().get("data", {}).get("activity_id")
+            if not activity_id:
+                raise ValueError(f"FortyGuard response did not include activity_id: {response.text[:500]}")
 
-            # ── Parse response — adjust keys to match real API response shape ──
-            for entry in data.get("data", []):
-                ts_str = entry.get("timestamp") or entry.get("time") or entry.get("dt")
-                temp_val = entry.get("temperature") or entry.get("temp") or entry.get("value")
-                if ts_str is None or temp_val is None:
-                    continue
-                temp_f = float(temp_val)
-                all_records.append(
-                    {
-                        "timestamp": datetime.fromisoformat(ts_str.replace("Z", "")),
-                        "location": self.location,
-                        "temp_f": round(temp_f, 2),
-                        "temp_c": round(_f_to_c(temp_f), 2),
-                    }
-                )
-
-            chunk_start = chunk_end + timedelta(hours=1)
+            result = self._poll_fortyguard(activity_id, api_key)
+            temperature_c = self._extract_fortyguard_temperature(result)
+            if temperature_c is None:
+                raise ValueError("FortyGuard completed task contained no temperature tile")
+            temperature_f = temperature_c * 9.0 / 5.0 + 32.0
+            all_records.append({
+                "timestamp": request_time,
+                "location": self.location,
+                "temp_f": round(temperature_f, 2),
+                "temp_c": round(temperature_c, 2),
+            })
+            request_time += timedelta(hours=1)
 
         if not all_records:
-            logger.warning("FortyGuard returned 0 records — check API key and endpoint.")
-            return pd.DataFrame(columns=["timestamp", "location", "temp_f", "temp_c"])
+            raise ValueError("FortyGuard returned no temperature records")
 
         return pd.DataFrame(all_records)
+
+    def _fortyguard_polygon(self) -> dict:
+        """Return a small valid GeoJSON area centered on the configured point."""
+        delta = 0.005
+        ring = [
+            [self.lon - delta, self.lat - delta],
+            [self.lon + delta, self.lat - delta],
+            [self.lon + delta, self.lat + delta],
+            [self.lon - delta, self.lat + delta],
+            [self.lon - delta, self.lat - delta],
+        ]
+        return {
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "properties": {},
+                "geometry": {"type": "Polygon", "coordinates": [ring]},
+            }],
+        }
+
+    @staticmethod
+    def _poll_fortyguard(activity_id: str, api_key: str) -> dict:
+        """Poll a submitted FortyGuard task with a bounded wait."""
+        import time
+
+        url = f"https://api.fortyguard.com/v1/status/{activity_id}"
+        for _ in range(60):
+            response = requests.get(url, headers={"api-key": api_key}, timeout=60)
+            response.raise_for_status()
+            body = response.json()
+            data = body.get("data", {})
+            status = str(data.get("status", "")).lower()
+            if status in {"completed", "succeeded"}:
+                return data
+            if status in {"failed", "error"}:
+                raise RuntimeError(f"FortyGuard task {activity_id} failed: {body}")
+            time.sleep(5)
+        raise TimeoutError(f"FortyGuard task {activity_id} did not complete within 5 minutes")
+
+    @staticmethod
+    def _extract_fortyguard_temperature(data: dict) -> float | None:
+        """Extract the mean Celsius temperature from completed heatmap tiles."""
+        result = data.get("result", {})
+        features = result.get("map_data", {}).get("features", [])
+        values = []
+        for feature in features:
+            properties = feature.get("properties", {})
+            for key in ("temperature", "temp", "value", "temperature_celsius"):
+                if properties.get(key) is not None:
+                    values.append(float(properties[key]))
+                    break
+        return sum(values) / len(values) if values else None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

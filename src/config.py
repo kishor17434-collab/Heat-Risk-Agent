@@ -30,8 +30,8 @@ class Config:
         
         # Validations and parsing
         try:
-            lat = float(os.getenv("LAT", "29.7604"))
-            lon = float(os.getenv("LON", "-95.3698"))
+            lat = float(os.getenv("LOCATION_LAT", "29.7604"))
+            lon = float(os.getenv("LOCATION_LON", "-95.3698"))
         except ValueError:
             lat, lon = 29.7604, -95.3698
             

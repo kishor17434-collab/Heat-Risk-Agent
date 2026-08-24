@@ -41,6 +41,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Run the test suite:
+
+```bash
+pytest
+```
+
 ### 2. Configure environment
 
 ```bash
@@ -144,9 +150,10 @@ heat-risk-agent/
 > *"In ERCOT COAST zone summer data, every 10°F increase in temperature correlates with an X% increase in electricity demand (Pearson r = Y, peak lag = Z hours)."*
 
 **Risk score scale:**
-- 0–50: Normal operations (green)
-- 50–70: Elevated risk — monitor (yellow)
-- 70–100: High risk — agent alerts (red)
+- 0–49: Normal operations (green)
+- 50–69: Elevated risk — monitor (yellow)
+- 70–84: High risk — agent alerts (orange)
+- 85–100: Critical risk — immediate response (red)
 
 **Slack alert format:**
 ```

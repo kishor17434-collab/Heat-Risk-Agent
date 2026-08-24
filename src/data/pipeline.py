@@ -34,7 +34,8 @@ Or via CLI:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -53,8 +54,8 @@ _PROCESSED_DIR = _PROJECT_ROOT / "data" / "processed"
 
 
 def run_pipeline(
-    start: str | datetime = "2024-06-01",
-    end: str | datetime = "2024-08-31",
+    start: str | datetime | None = None,
+    end: str | datetime | None = None,
     temp_mode: str | None = None,
     save: bool = True,
 ) -> pd.DataFrame:
@@ -72,6 +73,19 @@ def run_pipeline(
     -------
     pd.DataFrame — combined, cleaned, feature-enriched dataset
     """
+    if start is None or end is None:
+        if (temp_mode or os.getenv("TEMP_DATA_MODE", "simulate")).lower() == "fortyguard":
+            # FortyGuard heatmap requests are asynchronous and hourly. Keep the
+            # default live refresh small enough for an interactive run.
+            end_dt = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+            start = (end_dt - timedelta(hours=1)).isoformat()
+            end = end_dt.isoformat()
+        else:
+            end_dt = datetime.utcnow().date()
+            start_dt = end_dt - timedelta(days=30)
+            start = start_dt.isoformat()
+            end = end_dt.isoformat()
+
     logger.info("Pipeline starting: %s → %s", start, end)
 
     # ── 1. Fetch temperature ───────────────────────────────────────────────────

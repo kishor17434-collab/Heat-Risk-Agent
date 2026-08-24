@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -7,9 +8,25 @@ import pandas as pd
 from src.model.predict import load_model
 from src.preflight import ProjectPreflightError, validate_required_paths
 from src.model.train import train_and_save
+from src.config import Config
 
 
 class TestPreflight(unittest.TestCase):
+    def test_config_uses_location_coordinates(self):
+        previous = {key: os.environ.get(key) for key in ("LOCATION_LAT", "LOCATION_LON")}
+        try:
+            os.environ["LOCATION_LAT"] = "40.7128"
+            os.environ["LOCATION_LON"] = "-74.0060"
+            config = Config.from_env()
+            self.assertEqual(config.lat, 40.7128)
+            self.assertEqual(config.lon, -74.0060)
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
     def test_validate_required_paths_raises_for_missing_files(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             missing = Path(tmp_dir) / "missing.csv"
