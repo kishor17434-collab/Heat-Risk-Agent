@@ -21,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.model.train import train_and_save
+from src.preflight import ProjectPreflightError, validate_required_paths
 
 from src.cli_utils import configure_logging
 
@@ -44,6 +45,10 @@ def main() -> int:
         parser.add_argument("--no-save", action="store_true", help="Don't write model files")
         parser.add_argument("--smoke-test", action="store_true", help="Run a quick validation smoke test after training")
         args = parser.parse_args()
+
+        input_path = args.data or Path(__file__).resolve().parents[1] / "data" / "processed" / "combined.csv"
+        if not args.no_save:
+            validate_required_paths([("combined dataset", input_path)])
 
         train_and_save(combined_path=args.data, save=not args.no_save)
 

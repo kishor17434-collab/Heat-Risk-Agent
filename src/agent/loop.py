@@ -44,6 +44,7 @@ from dotenv import load_dotenv
 
 from src.agent.alerts import AlertManager
 from src.model.predict import load_model, predict_risk
+from src.preflight import ProjectPreflightError, validate_required_paths
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -119,11 +120,10 @@ class AgentLoop:
 
     def _run_simulate(self, max_steps: int | None) -> None:
         """Replay historical combined.csv data row by row."""
-        if not _COMBINED_CSV.exists():
-            raise FileNotFoundError(
-                f"combined.csv not found at {_COMBINED_CSV}. "
-                "Run 'python scripts/run_pipeline.py' first."
-            )
+        try:
+            validate_required_paths([("combined dataset", _COMBINED_CSV)])
+        except ProjectPreflightError:
+            raise
 
         df = pd.read_csv(_COMBINED_CSV, parse_dates=["timestamp"])
         df = df.sort_values("timestamp").reset_index(drop=True)

@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.agent.loop import AgentLoop
+from src.preflight import ProjectPreflightError, validate_required_paths
 
 from src.cli_utils import configure_logging
 
@@ -62,6 +63,11 @@ def main() -> int:
             help="Risk score threshold (0-100) for triggering alerts. Overrides RISK_THRESHOLD env var.",
         )
         args = parser.parse_args()
+
+        if args.mode == "simulate":
+            validate_required_paths([
+                ("combined dataset", Path(__file__).resolve().parents[1] / "data" / "processed" / "combined.csv"),
+            ])
 
         agent = AgentLoop(threshold=args.threshold)
         agent.run(mode=args.mode, max_steps=args.steps)

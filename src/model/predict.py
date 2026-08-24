@@ -38,6 +38,7 @@ import numpy as np
 import pandas as pd
 
 from src.model.features import build_inference_row
+from src.preflight import ProjectPreflightError, validate_required_paths
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +64,12 @@ def load_model(model_path: str | Path | None = None) -> dict:
     meta_path = Path(str(model_path).replace(".pkl", "")).parent / "model_meta.json"
 
     if not Path(model_path).exists():
-        raise FileNotFoundError(
-            f"Model not found at {model_path}. "
-            "Run 'python scripts/run_train.py' first."
+        raise ProjectPreflightError(
+            f"Model artifact missing: {model_path}. "
+            "Run 'python scripts/run_train.py' first to train the model."
         )
+
+    validate_required_paths([("model artifact", model_path), ("model metadata", meta_path)])
 
     pipeline = joblib.load(model_path)
     meta = {}

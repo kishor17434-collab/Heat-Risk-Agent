@@ -72,7 +72,10 @@ def train_and_save(
     logger.info("Training on %d rows after feature engineering", len(df))
 
     if len(df) < 100:
-        raise ValueError(f"Need at least 100 rows to train; got {len(df)}")
+        raise ValueError(
+            f"Need at least 100 rows to train; got {len(df)}. "
+            "Use a longer date range in the summer window (June–August) or rerun the pipeline with more hours."
+        )
 
     # ── 2. Time-series split ───────────────────────────────────────────────────
     split_idx = int(len(df) * _TRAIN_SPLIT)
