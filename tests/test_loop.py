@@ -65,3 +65,26 @@ def test_live_poll_logs_network_error_and_continues(monkeypatch, caplog):
         loop._run_live(max_steps=1)
 
     assert "temporary network failure" in caplog.text
+
+
+def test_decision_log_does_not_append_identical_latest_entry(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.agent.loop._LOGS_DIR", tmp_path)
+    monkeypatch.setattr("src.agent.loop._DECISION_LOG", tmp_path / "agent_decisions.log")
+    monkeypatch.setattr(
+        "src.agent.loop.load_model",
+        lambda: {"meta": {}, "model": None, "thresholds": {}},
+    )
+    loop = AgentLoop(threshold=75)
+    decision = {
+        "timestamp": "2026-08-24 09:00",
+        "temp_f": 100.8,
+        "predicted_demand_mw": 26615.0,
+        "risk_score": 29.5,
+        "risk_level": "normal",
+        "alert_triggered": False,
+    }
+
+    loop._write_decision_log(decision)
+    loop._write_decision_log(decision)
+
+    assert len((tmp_path / "agent_decisions.log").read_text(encoding="utf-8").splitlines()) == 1

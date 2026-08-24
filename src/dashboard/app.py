@@ -110,19 +110,6 @@ with st.sidebar:
     if st.button("🔄 Refresh Now"):
         st.rerun()
 
-    if st.button("▶️ Run Agent Simulation (10 steps)"):
-        with st.spinner("Running agent simulation..."):
-            try:
-                from src.agent.loop import AgentLoop
-                loop = AgentLoop(threshold=_RISK_THRESHOLD, poll_interval=1)
-                loop.run(mode="simulate", max_steps=10)
-                st.success("Simulation complete! Logs updated.")
-            except Exception as e:
-                st.error(f"Simulation failed: {e}")
-        import time
-        time.sleep(1.5)
-        st.rerun()
-
     st.markdown("---")
     st.caption("Heat Risk Agent • Hackathon Demo")
 
@@ -148,6 +135,11 @@ def _recent_window(df: pd.DataFrame, days: int = 7) -> pd.DataFrame:
     if recent.empty:
         return df.tail(24).copy()
     return recent.sort_values("timestamp").reset_index(drop=True)
+
+
+def _unique_log_lines(lines: list[str]) -> list[str]:
+    """Remove exact duplicate log entries while preserving their order."""
+    return list(dict.fromkeys(line for line in lines if line.strip()))
 
 
 @st.cache_data(ttl=_CACHE_TTL)
@@ -432,6 +424,7 @@ with col_dec:
         if df is not None and not df.empty:
             log_start = df["timestamp"].min().strftime("%Y-%m-%d")
             lines = [line for line in lines if line.startswith("[") and line[1:11] >= log_start]
+        lines = _unique_log_lines(lines)
         # Show last 50 decisions, most recent first
         recent_lines = lines[-50:][::-1]
         if recent_lines:
@@ -456,6 +449,7 @@ with col_alert:
         if df is not None and not df.empty:
             log_start = df["timestamp"].min().strftime("%Y-%m-%d")
             alert_lines = [line for line in alert_lines if line.startswith("[") and line[1:11] >= log_start]
+        alert_lines = _unique_log_lines(alert_lines)
         alert_lines = [l for l in alert_lines if l.strip()][-20:][::-1]
         if alert_lines:
             for line in alert_lines:

@@ -292,7 +292,7 @@ class AgentLoop:
     # ── Decision log ───────────────────────────────────────────────────────────
 
     def _write_decision_log(self, decision: dict) -> None:
-        """Append one line per decision to logs/agent_decisions.log."""
+        """Append a decision unless the exact entry is already the latest line."""
         _LOGS_DIR.mkdir(parents=True, exist_ok=True)
         flag = "ALERT" if decision["alert_triggered"] else "ok"
         line = (
@@ -302,5 +302,9 @@ class AgentLoop:
             f"risk={decision['risk_score']:.1f} | "
             f"level={decision['risk_level']}"
         )
+        if _DECISION_LOG.exists():
+            with open(_DECISION_LOG, "r", encoding="utf-8") as f:
+                if f.read().splitlines()[-1:] == [line]:
+                    return
         with open(_DECISION_LOG, "a", encoding="utf-8") as f:
             f.write(line + "\n")
