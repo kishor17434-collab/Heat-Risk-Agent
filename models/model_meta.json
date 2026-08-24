@@ -1,0 +1,45 @@
+{
+  "model_type": "GradientBoosting",
+  "features": [
+    "hour",
+    "day_of_week",
+    "month",
+    "is_weekend",
+    "temp_f",
+    "temp_rolling_3h",
+    "temp_rolling_24h",
+    "temp_delta_6h",
+    "temp_delta_24h",
+    "season"
+  ],
+  "train_rows": 1747,
+  "test_rows": 437,
+  "test_rmse_mw": 419.7,
+  "test_mae_mw": 332.3,
+  "test_r2": 0.9346,
+  "demand_percentile_thresholds_mw": {
+    "p50": 27021.449999999997,
+    "p60": 27485.5,
+    "p70": 27855.2,
+    "p75": 28049.050000000003,
+    "p80": 28304.32,
+    "p85": 28604.72,
+    "p90": 28971.170000000002,
+    "p95": 29486.85,
+    "p99": 30222.095
+  },
+  "demand_min": 21930.2,
+  "demand_max": 30880.8,
+  "all_model_results": {
+    "LinearRegression": {
+      "rmse": 574.7031862684146,
+      "mae": 454.88705211373514,
+      "r2": 0.8773701965965788
+    },
+    "GradientBoosting": {
+      "rmse": 419.71504331038705,
+      "mae": 332.3247208786043,
+      "r2": 0.934593954399899
+    }
+  }
+}
