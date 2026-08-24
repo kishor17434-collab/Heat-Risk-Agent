@@ -280,8 +280,8 @@ else:
                 value=f"{risk_color} {current_risk:.0f}/100",
                 delta=f"{risk_level.upper()}",
             )
-            if current_risk >= threshold:
-                st.error(f"🚨 Risk {current_risk:.0f} exceeds threshold {threshold} — ALERT TRIGGERED")
+            if current_risk >= _RISK_THRESHOLD:
+                st.error(f"🚨 Risk {current_risk:.0f} exceeds threshold {_RISK_THRESHOLD:.0f} — ALERT TRIGGERED")
         else:
             st.metric(label="⚠️ Risk Score", value="— (run train first)")
 
