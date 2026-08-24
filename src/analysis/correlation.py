@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _PROCESSED_DIR = _PROJECT_ROOT / "data" / "processed"
+_PIPELINE_META = _PROCESSED_DIR / "pipeline_meta.json"
 
 
 def run_analysis(
@@ -62,6 +63,16 @@ def run_analysis(
     # ── 1. Pearson correlation (same-hour, no lag) ─────────────────────────────
     r, p_value = stats.pearsonr(df["temp_f"], df["demand_mw"])
     logger.info("Pearson r=%.4f  p=%.4e  n=%d", r, p_value, len(df))
+    sign_warning = bool(r < 0.2)
+    sign_warning_message = (
+        f"UNEXPECTED CORRELATION SIGN: r = {r:.2f}. Temperature and demand "
+        "are expected to be positively correlated in a summer cooling-load grid. "
+        "This usually indicates inconsistent data sources; investigate before using the demo finding."
+        if sign_warning else ""
+    )
+    if sign_warning:
+        logger.warning("⚠️ %s", sign_warning_message)
+        print("\n" + "!" * 70 + "\n  ⚠️  " + sign_warning_message + "\n" + "!" * 70 + "\n")
 
     # ── 2. OLS slope — how much does demand change per 1°F? ────────────────────
     slope, intercept, *_ = stats.linregress(df["temp_f"], df["demand_mw"])
@@ -100,6 +111,8 @@ def run_analysis(
         "mean_demand_mw": round(float(mean_demand), 0),
         "best_lag_hours": int(best_lag["lag_hours"]),
         "best_lag_r": round(float(best_lag["pearson_r"]), 4),
+        "sign_warning": sign_warning,
+        "sign_warning_message": sign_warning_message,
         "lag_correlations": lag_results,
         "demand_percentiles": {
             "p70": round(demand_p70, 0),
@@ -179,6 +192,8 @@ def _print_results(report: dict, demo_quote: str) -> None:
     print(f"  Slope (normalised)   : {report['slope_pct_per_10f']}% demand change per 10°F")
     print(f"  Best lag             : {report['best_lag_hours']}h (r = {report['best_lag_r']})")
     print(f"  Sample size          : {report['n_samples']:,} hourly observations")
+    if report.get("sign_warning"):
+        print(f"\n  ⚠️  WARNING: {report['sign_warning_message']}")
     print()
     print("  Lag table:")
     for lag in report["lag_correlations"]:

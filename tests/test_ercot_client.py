@@ -1,6 +1,7 @@
 import pytest
 from datetime import datetime, timezone
 import pandas as pd
+import requests
 from src.data.ercot_client import ERCOTClient, _parse_ercot_timestamp
 
 def test_ercot_client_simulate(sample_timestamps):
@@ -35,3 +36,34 @@ def test_ercot_parse_timestamp():
     
     assert _parse_ercot_timestamp("2023-08-01", "25") is None
     assert _parse_ercot_timestamp("2023-08-01", "0") is None
+
+
+def test_ercot_total_fallback_is_labeled_and_warned(monkeypatch, caplog):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"OprDt": "2024-08-01", "HourEnding": "01", "TOTAL": 65000}]}
+
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: Response())
+    with caplog.at_level("WARNING"):
+        result = ERCOTClient(region="COAST")._fetch_ercot_dashboard(
+            datetime(2024, 8, 1), datetime(2024, 8, 1)
+        )
+
+    assert result.iloc[0]["demand_mw"] == 65000
+    assert result.iloc[0]["region_source"] == "TOTAL_fallback"
+    assert "used system-wide TOTAL instead" in caplog.text
+
+
+def test_demand_simulation_mode_skips_network(monkeypatch, sample_timestamps):
+    def fail_network(*args, **kwargs):
+        raise AssertionError("network should not be called in simulate mode")
+
+    monkeypatch.setattr(requests, "get", fail_network)
+    monkeypatch.setattr(requests, "post", fail_network)
+    result = ERCOTClient(mode="simulate").fetch(*sample_timestamps)
+
+    assert result["source"] == "Simulated"
+    assert not result["data"].empty

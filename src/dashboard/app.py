@@ -65,6 +65,7 @@ _MODELS_DIR = _PROJECT_ROOT / "models"
 _LOGS_DIR = _PROJECT_ROOT / "logs"
 _COMBINED_CSV = _PROCESSED_DIR / "combined.csv"
 _CORRELATION_JSON = _PROCESSED_DIR / "correlation_report.json"
+_PIPELINE_META_JSON = _PROCESSED_DIR / "pipeline_meta.json"
 _MODEL_META_JSON = _MODELS_DIR / "model_meta.json"
 _DECISION_LOG = _LOGS_DIR / "agent_decisions.log"
 _ALERT_LOG = _LOGS_DIR / "agent_alerts.log"
@@ -202,6 +203,14 @@ def load_model_meta() -> dict | None:
         return json.load(f)
 
 
+@st.cache_data(ttl=_CACHE_TTL)
+def load_pipeline_meta() -> dict | None:
+    if not _PIPELINE_META_JSON.exists():
+        return None
+    with open(_PIPELINE_META_JSON, encoding="utf-8") as file:
+        return json.load(file)
+
+
 def load_forecast() -> pd.DataFrame | None:
     """Generate a live 24h forecast using the trained model."""
     try:
@@ -226,6 +235,12 @@ def load_forecast() -> pd.DataFrame | None:
 df, load_err = load_combined_data()
 corr = load_correlation_report()
 meta = load_model_meta()
+pipeline_meta = load_pipeline_meta()
+
+if pipeline_meta and pipeline_meta.get("source_mismatch"):
+    st.error(f"⚠️ {pipeline_meta.get('mismatch_message', 'Temperature and demand sources do not match.')}")
+if corr and corr.get("sign_warning"):
+    st.warning(f"⚠️ {corr.get('sign_warning_message', 'Correlation sign requires investigation.')}")
 
 # ── Demo quote banner ──────────────────────────────────────────────────────────
 if corr and corr.get("demo_quote"):

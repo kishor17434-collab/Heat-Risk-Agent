@@ -4,59 +4,61 @@
     "start": "2024-06-01 00:00:00",
     "end": "2024-08-31 23:00:00"
   },
-  "pearson_r": -0.7341,
-  "pearson_p": 0.0,
-  "slope_mw_per_f": -1228.82,
-  "slope_pct_per_10f": -19.53,
-  "mean_demand_mw": 62928.0,
-  "best_lag_hours": 0,
-  "best_lag_r": -0.7341,
+  "pearson_r": 0.626,
+  "pearson_p": 1.6739850265266967e-240,
+  "slope_mw_per_f": 276.13,
+  "slope_pct_per_10f": 9.82,
+  "mean_demand_mw": 28124.0,
+  "best_lag_hours": 1,
+  "best_lag_r": 0.6583,
+  "sign_warning": false,
+  "sign_warning_message": "",
   "lag_correlations": [
     {
       "lag_hours": 0,
-      "pearson_r": -0.7341,
-      "p_value": 0.0
+      "pearson_r": 0.626,
+      "p_value": 1.6739850265266967e-240
     },
     {
       "lag_hours": 1,
-      "pearson_r": -0.6183,
-      "p_value": 5.850939130467222e-233
+      "pearson_r": 0.6583,
+      "p_value": 2.7137544665113347e-274
     },
     {
       "lag_hours": 2,
-      "pearson_r": -0.4615,
-      "p_value": 8.660278729399144e-117
+      "pearson_r": 0.644,
+      "p_value": 1.0183030201045914e-258
     },
     {
       "lag_hours": 3,
-      "pearson_r": -0.2759,
-      "p_value": 8.224822644376833e-40
+      "pearson_r": 0.5873,
+      "p_value": 1.3411682089073554e-204
     },
     {
       "lag_hours": 6,
-      "pearson_r": 0.3261,
-      "p_value": 1.0461727366412418e-55
+      "pearson_r": 0.2225,
+      "p_value": 4.2954662054085965e-26
     },
     {
       "lag_hours": 12,
-      "pearson_r": 0.6758,
-      "p_value": 6.163206809602324e-293
+      "pearson_r": -0.5846,
+      "p_value": 1.6513557562388e-201
     },
     {
       "lag_hours": 24,
-      "pearson_r": -0.7338,
-      "p_value": 0.0
+      "pearson_r": 0.6207,
+      "p_value": 8.06701031098575e-233
     }
   ],
   "demand_percentiles": {
-    "p70": 69364.0,
-    "p85": 75432.0,
-    "p95": 80107.0
+    "p70": 29504.0,
+    "p85": 31337.0,
+    "p95": 33008.0
   },
   "temp_percentiles": {
     "p70": 103.3,
     "p85": 106.4,
     "p95": 108.8
   },
-  "demo_quote": "Every 10\u00b0F increase in temperature correlates with a 19.5% decrease in electricity demand (Pearson r = -0.73, same-hour response, n = 2,208 hours)."
+  "demo_quote": "Every 10\u00b0F increase in temperature correlates with a 9.8% increase in electricity demand (Pearson r = 0.63, 1h lag, n = 2,208 hours)."
 }

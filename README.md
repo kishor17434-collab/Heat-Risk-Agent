@@ -81,6 +81,7 @@ streamlit run src/dashboard/app.py
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `TEMP_DATA_MODE` | No | `simulate` | Temperature backend: `simulate` / `open_meteo` / `fortyguard` |
+| `DEMAND_DATA_MODE` | No | `auto` | Demand backend mode: `auto` or `simulate` |
 | `FORTYGUARD_API_KEY` | Only if `fortyguard` mode | — | FortyGuard API key |
 | `EIA_API_KEY` | No | — | EIA Open Data key (enables EIA fallback for demand data) |
 | `ERCOT_REGION` | No | `COAST` | ERCOT weather zone for demand data |

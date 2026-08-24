@@ -51,12 +51,14 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _RAW_DIR = _PROJECT_ROOT / "data" / "raw"
 _PROCESSED_DIR = _PROJECT_ROOT / "data" / "processed"
+_PIPELINE_META = _PROCESSED_DIR / "pipeline_meta.json"
 
 
 def run_pipeline(
     start: str | datetime | None = None,
     end: str | datetime | None = None,
     temp_mode: str | None = None,
+    demand_mode: str | None = None,
     save: bool = True,
 ) -> pd.DataFrame:
     """
@@ -67,6 +69,7 @@ def run_pipeline(
     start     : First date (inclusive), e.g. "2024-06-01"
     end       : Last date  (inclusive), e.g. "2024-08-31"
     temp_mode : Override TEMP_DATA_MODE env var (simulate | open_meteo | fortyguard)
+    demand_mode : Override DEMAND_DATA_MODE env var (auto | simulate)
     save      : Write CSVs to data/raw/ and data/processed/ if True
 
     Returns
@@ -98,10 +101,27 @@ def run_pipeline(
         _save_csv(temp_df, _RAW_DIR / "temp_raw.csv")
 
     # ── 2. Fetch demand ────────────────────────────────────────────────────────
-    demand_client = ERCOTClient()
+    demand_client = ERCOTClient(mode=demand_mode)
     demand_res = demand_client.fetch(start=start, end=end)
     demand_df = demand_res["data"]
     logger.info("Demand: %d rows", len(demand_df))
+
+    temp_source = str(temp_res["source"]).lower()
+    demand_source = str(demand_res["source"])
+    temp_synthetic = temp_source == "simulate"
+    demand_synthetic = demand_source == "Simulated"
+    source_mismatch = temp_synthetic != demand_synthetic
+    mismatch_message = ""
+    if source_mismatch:
+        mismatch_message = (
+            f"DATA SOURCE MISMATCH: temperature is "
+            f"{'SYNTHETIC' if temp_synthetic else 'REAL'} ({temp_res['source']}) "
+            f"but demand is {'SYNTHETIC' if demand_synthetic else 'REAL'} ({demand_source}). "
+            "Correlation and model results may not reflect a genuine physical relationship. "
+            "Force both sources to simulate or use both real sources before trusting results."
+        )
+        logger.warning("⚠️ %s", mismatch_message)
+        print("\n" + "!" * 70 + "\n  ⚠️  " + mismatch_message + "\n" + "!" * 70 + "\n")
 
     if save:
         _save_csv(demand_df, _RAW_DIR / "demand_raw.csv")
@@ -127,7 +147,11 @@ def run_pipeline(
     )
     demand_hourly = (
         demand_df.groupby("timestamp", as_index=False)
-        .agg(region=("region", "first"), demand_mw=("demand_mw", "mean"))
+        .agg(
+            region=("region", "first"),
+            region_source=("region_source", "first") if "region_source" in demand_df else ("region", "first"),
+            demand_mw=("demand_mw", "mean"),
+        )
     )
 
     combined = pd.merge(temp_hourly, demand_hourly, on="timestamp", how="inner")
@@ -151,10 +175,17 @@ def run_pipeline(
 
     # ── 6. Sort and reset index ────────────────────────────────────────────────
     combined = combined.sort_values("timestamp").reset_index(drop=True)
+    combined.attrs["pipeline_meta"] = {
+        "temperature_source": temp_res["source"],
+        "demand_source": demand_res["source"],
+        "source_mismatch": source_mismatch,
+        "mismatch_message": mismatch_message,
+    }
 
     # ── 7. Save combined dataset ───────────────────────────────────────────────
     if save:
         _save_csv(combined, _PROCESSED_DIR / "combined.csv")
+        _save_json(combined.attrs["pipeline_meta"], _PIPELINE_META)
 
     logger.info(
         "Pipeline complete: %d rows from %s to %s",
@@ -196,6 +227,15 @@ def _save_csv(df: pd.DataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False)
     logger.info("Saved: %s (%d rows)", path, len(df))
+
+
+def _save_json(value: dict, path: Path) -> None:
+    import json
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(value, file, indent=2)
+    logger.info("Saved: %s", path)
 
 
 def _print_summary(df: pd.DataFrame) -> None:

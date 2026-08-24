@@ -60,6 +60,12 @@ def main() -> int:
             help="Override TEMP_DATA_MODE env var.",
         )
         parser.add_argument(
+            "--demand-mode",
+            default=None,
+            choices=["auto", "simulate"],
+            help="Override DEMAND_DATA_MODE env var.",
+        )
+        parser.add_argument(
             "--no-save",
             action="store_true",
             help="Skip writing output files (useful for quick tests).",
@@ -70,6 +76,7 @@ def main() -> int:
             start=args.start,
             end=args.end,
             temp_mode=args.mode,
+            demand_mode=args.demand_mode,
             save=not args.no_save,
         )
 

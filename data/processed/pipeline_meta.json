@@ -1,0 +1,6 @@
+{
+  "temperature_source": "simulate",
+  "demand_source": "Simulated",
+  "source_mismatch": false,
+  "mismatch_message": ""
+}

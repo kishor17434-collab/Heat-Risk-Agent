@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import math
 import os
 from datetime import datetime, timedelta
 
@@ -33,6 +34,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 _DEFAULT_REGION = os.getenv("ERCOT_REGION", "COAST")
+_DEMAND_DATA_MODE = os.getenv("DEMAND_DATA_MODE", "auto").lower()
 _EIA_API_KEY = os.getenv("EIA_API_KEY", "")
 
 # ERCOT public reports base — Hourly Load data by weather zone
@@ -51,8 +53,11 @@ _SIM_WEEKEND_FACTOR = 0.88
 class ERCOTClient:
     """Fetch hourly electricity demand data from ERCOT / EIA."""
 
-    def __init__(self, region: str | None = None) -> None:
+    def __init__(self, region: str | None = None, mode: str | None = None) -> None:
         self.region = (region or _DEFAULT_REGION).upper()
+        self.mode = (mode or os.getenv("DEMAND_DATA_MODE", _DEMAND_DATA_MODE)).lower()
+        if self.mode not in {"auto", "simulate"}:
+            raise ValueError("DEMAND_DATA_MODE must be 'auto' or 'simulate'")
         logger.info("ERCOTClient initialised for region=%s", self.region)
 
     # ── Main entry point ───────────────────────────────────────────────────────
@@ -74,6 +79,15 @@ class ERCOTClient:
         """
         start_dt = _parse_date(start)
         end_dt = _parse_date(end, end_of_day=True)
+
+        if self.mode == "simulate":
+            msg = "Demand data forced to simulation by DEMAND_DATA_MODE=simulate."
+            logger.info(msg)
+            return {
+                "data": _validate_and_clean(self._fetch_simulate(start_dt, end_dt)),
+                "source": "Simulated",
+                "warning": msg,
+            }
 
         # Try ERCOT dashboard API first
         logger.info("Attempting ERCOT public API …")
@@ -115,6 +129,7 @@ class ERCOTClient:
         # ERCOT's public dashboard provides system-wide & zone data.
         # We request the time range in chunks since ERCOT API can time out on long ranges.
         all_records: list[dict] = []
+        total_fallback_count = 0
         chunk_start = start_dt
 
         while chunk_start <= end_dt:
@@ -135,13 +150,32 @@ class ERCOTClient:
                 )
                 if ts is None:
                     continue
-                demand = entry.get(self.region) or entry.get("TOTAL")
+                regional_demand = entry.get(self.region)
+                used_total_fallback = regional_demand is None
+                demand = regional_demand if regional_demand is not None else entry.get("TOTAL")
                 if demand is None:
                     continue
+                if used_total_fallback:
+                    total_fallback_count += 1
                 all_records.append(
-                    {"timestamp": ts, "region": self.region, "demand_mw": float(demand)}
+                    {
+                        "timestamp": ts,
+                        "region": self.region,
+                        "region_source": "TOTAL_fallback" if used_total_fallback else self.region,
+                        "demand_mw": float(demand),
+                    }
                 )
             chunk_start = chunk_end + timedelta(hours=1)
+
+        if total_fallback_count:
+            logger.warning(
+                "ERCOT response missing '%s' field for %d records — used "
+                "system-wide TOTAL instead. Demand values reflect ERCOT-wide "
+                "load, not the %s zone.",
+                self.region,
+                total_fallback_count,
+                self.region,
+            )
 
         return pd.DataFrame(all_records)
 
@@ -191,7 +225,12 @@ class ERCOTClient:
                 except ValueError:
                     continue
                 all_records.append(
-                    {"timestamp": ts, "region": self.region, "demand_mw": float(value)}
+                    {
+                        "timestamp": ts,
+                        "region": self.region,
+                        "region_source": "EIA",
+                        "demand_mw": float(value),
+                    }
                 )
 
             if len(rows) < page_size:
@@ -232,14 +271,25 @@ class ERCOTClient:
             # Weekend reduction
             weekend = _SIM_WEEKEND_FACTOR if dow >= 5 else 1.0
 
+            # Shared cooling-load signal aligned with TemperatureClient's
+            # synthetic daily and seasonal temperature pattern.
+            daily_heat = max(0.0, math.sin(math.pi * (hour - 6.0) / 12.0))
+            seasonal_heat = max(0.0, 1.0 + math.sin(math.pi * (datetime(2024, month, 15).timetuple().tm_yday - 90) / 180.0))
+            heat_load = 2_500.0 * daily_heat * seasonal_heat
+
             # Random noise
             noise = rng.normal(0, 400)
 
-            demand = (_SIM_BASE_DEMAND_MW + _SIM_PEAK_ADDITION * hour_factor) * seasonal * weekend + noise
+            demand = (
+                (_SIM_BASE_DEMAND_MW + _SIM_PEAK_ADDITION * hour_factor) * seasonal * weekend
+                + heat_load * weekend
+                + noise
+            )
             records.append(
                 {
                     "timestamp": ts.replace(tzinfo=None),
                     "region": self.region,
+                    "region_source": "Simulated",
                     "demand_mw": round(max(demand, 8_000), 1),
                 }
             )
